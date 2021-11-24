@@ -19,9 +19,13 @@ package org.springframework.beans.factory.support;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.ObjectFactory;
 import org.springframework.beans.testfixture.beans.DerivedTestBean;
 import org.springframework.beans.testfixture.beans.TestBean;
+import org.springframework.util.Assert;
+
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -59,6 +63,7 @@ public class DefaultSingletonBeanRegistryTests {
 		beanRegistry.destroySingletons();
 		assertThat(beanRegistry.getSingletonCount()).isEqualTo(0);
 		assertThat(beanRegistry.getSingletonNames().length).isEqualTo(0);
+
 	}
 
 	@Test
@@ -101,4 +106,48 @@ public class DefaultSingletonBeanRegistryTests {
 		assertThat(beanRegistry.isDependent("c", "c")).isTrue();
 	}
 
+	@Test
+	public void testDestoryMethod() {
+		final String beanName = "destoryTestBean";
+		AtomicReference<String> destoryInvokeResult = new AtomicReference<>();
+		DefaultSingletonBeanRegistry beanRegistry = new DefaultSingletonBeanRegistry();
+		class TestBeans implements DisposableBean {
+			int haveBirthday() {
+				return 0;
+			}
+			public void destroy() throws Exception{}
+			TestBeans() {
+				haveBirthday();
+			}
+		}
+		TestBeans testBean = new TestBeans() {
+			final Runnable thread1 = new Thread(() -> {
+				destoryInvokeResult.set("ShutDown");
+				System.err.println("ShutDown");
+//				Thread.currentThread().stop();
+//				System.exit(0);
+			});
+			@Override
+			public int haveBirthday() {
+				System.err.println("init");
+				return super.haveBirthday();
+			}
+			@Override
+			public void destroy() {
+				thread1.run();
+//				System.exit(0);
+//				Thread.currentThread().stop();
+			}
+		};
+		beanRegistry.addSingleton(beanName, testBean);
+		assertThat(beanRegistry.getSingleton(beanName)).isEqualTo(testBean);
+		beanRegistry.destroySingletons();
+		assertThat(beanRegistry.getSingleton(beanName)).isNotEqualTo(testBean);
+		Assert.isNull(destoryInvokeResult.get(),"bean的destory方法不期望被加载 但被加载");
+		// 销毁bean的时候 必须传入实体bean
+		beanRegistry.destroyBean(beanName,null);
+		Assert.isNull(destoryInvokeResult.get(),"bean的destory方法不期望被加载 但被加载");
+		beanRegistry.destroyBean(beanName,testBean);
+		Assert.notNull(destoryInvokeResult.get(),"bean的destory方法期望被加载 但没有");
+	}
 }

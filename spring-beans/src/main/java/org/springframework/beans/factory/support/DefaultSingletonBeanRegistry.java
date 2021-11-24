@@ -16,14 +16,7 @@
 
 package org.springframework.beans.factory.support;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.beans.factory.BeanCreationException;
@@ -84,13 +77,13 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	private static final int SUPPRESSED_EXCEPTIONS_LIMIT = 100;
 
 
-	/* 单例对象的缓存：bean 名称到 bean 实例 */
+	/* 单例对象的缓存：bean 名称到 bean 实例 一级缓存 */
 	private final Map<String, Object> singletonObjects = new ConcurrentHashMap<>(256);
 
 	/* 单例工厂的缓存：bean 名称到 ObjectFactory */
 	private final Map<String, ObjectFactory<?>> singletonFactories = new HashMap<>(16);
 
-	/* 早期单例对象的缓存：bean 名称到 bean 实例 */
+	/* 早期单例对象的缓存：bean 名称到 bean 实例 二级缓存 */
 	private final Map<String, Object> earlySingletonObjects = new ConcurrentHashMap<>(16);
 
 	/* 一组已注册的单例，包含按注册顺序排列的 bean 名称 */
@@ -215,18 +208,24 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	 */
 	@Nullable
 	protected Object getSingleton(String beanName, boolean allowEarlyReference) {
+		Assert.notNull(beanName, "beanName can not be null");
 		// Quick check for existing instance without full singleton lock
 		Object singletonObject = this.singletonObjects.get(beanName);
+		// 若获取不到bean实例 且 当前实例在创建中
 		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
 			singletonObject = this.earlySingletonObjects.get(beanName);
+			//当二级缓存中没有当前实例 且 不允许使用二级缓存
 			if (singletonObject == null && allowEarlyReference) {
 				synchronized (this.singletonObjects) {
 					// Consistent creation of early reference within full singleton lock
+					// 锁住一级缓存
 					singletonObject = this.singletonObjects.get(beanName);
+					// 一级缓存中没有 从二级缓存中读取 二级缓存没有 从三级缓存读取
 					if (singletonObject == null) {
 						singletonObject = this.earlySingletonObjects.get(beanName);
 						if (singletonObject == null) {
 							ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);
+							// 三级缓存为空 则缓存创建工厂 (包装bean的实例的对象)
 							if (singletonFactory != null) {
 								singletonObject = singletonFactory.getObject();
 								this.earlySingletonObjects.put(beanName, singletonObject);

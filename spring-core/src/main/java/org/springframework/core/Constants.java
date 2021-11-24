@@ -66,6 +66,10 @@ public class Constants {
 		for (Field field : fields) {
 			if (ReflectionUtils.isPublicStaticFinal(field)) {
 				String name = field.getName();
+				String upperName = name.toUpperCase(Locale.UK);
+				if (!name.equals(upperName)) {
+					System.err.println("Field [" + name + "] must be upper!");
+				}
 				try {
 					Object value = field.get(null);
 					this.fieldCache.put(name, value);
